@@ -1,0 +1,555 @@
+---
+title: 'Movie Text Mining: Tokenization, Topic Modeling, Sentiment Analysis, Network
+  of Bigrams'
+author: "Marie Hasegawa"
+output:
+  html_document:
+    df_print: paged
+---
+
+# Appendix
+* Library of Packages
+* Project Overview
+  * Import IMDB_movies Data
+* Tokenization Relationships in Movie Franchise
+* Topic Modeling
+* Sentimental Analysis of Movies with Clusters: How Sentiment affects Rating and Revenue
+  + Sentiment Analysis of Movies using bing lexicon
+  + Sentiment Analysis of Movies using nrc lexicon
+* Network of Bigrams for Movies
+* Conclusion
+* References
+
+# Library of Packages
+```{r, message = FALSE, warning=FALSE}
+library(tidyverse)
+library(tidytext)
+library(topicmodels)
+library(ggplot2)
+#install.packages("viridis")
+library(viridis)
+#install.packages("textdata")
+library(textdata)
+#if(!require(psych)){install.packages("psych")}
+#if(!require(cluster)){install.packages("cluster")}
+#if(!require(fpc)){install.packages("fpc")}
+library(psych)
+library(cluster)
+library(fpc)
+#install.packages("ggraph")
+#install.packages("igraph")
+library(igraph)
+library(ggraph)
+#install.packages("topicmodels")
+library(topicmodels)
+#install.packages("reshape2")
+library(reshape2)
+```
+
+
+# Project Overview
+### Import IMDB_movies Data
+Read the dataset for this exercise:
+```{r, message=FALSE}
+movie_desc <- read_csv("https://raw.githubusercontent.com/reisanar/datasets/master/IMDB_movies.csv")
+names(movie_desc)<-str_replace_all(names(movie_desc), c(" " = "." , "\\(" = "", "\\)" = ""))
+movie_desc <-select(movie_desc, -c(Director, Genre, Actors, Year))
+movie_desc
+
+```
+
+The purpose of this project is to see if text mining techniques can ease better analysis for categorizing movies with just the `Descriptions` while ignoring the `Genre`from the dataset, `IMDB_movies.csv`, which is stored under the dataframe variable, `movies_desc`. 
+
+Tokenization (`TF-DF`) will be used to analyze term frequencies in movie `Descriptions` in order to determine  the conceptual theme of a movie franchise. 
+
+Using Topic Modeling will help find mixtures of terms that are associated to every topic and the mixture of topics that characterizes every document in the dataset, `IMDB_movies.csv`. 
+
+Sentimental Analysis of movies with `Sentimetal` clusters which will be using `bing` and `nrc` lexicons to see how `Sentiment` affects `Ratings` and `Revenues`. 
+
+The movie network of bigrams help illustrate how frequented word-relations from film `Descriptions` connect with other movies.
+
+# Tokenization Relationships in Movies Franchise
+```{r}
+movie_tf_idf <- movie_desc %>%
+  unnest_tokens(word, Description) %>% # tokenization
+  anti_join(stop_words) %>% #remove stop words
+  count(Title, word, sort=TRUE) %>%
+  bind_tf_idf(word, Title, n) %>%
+  arrange(-tf_idf) %>%
+  group_by(Title) %>%
+  top_n(20) %>%
+  ungroup 
+movie_tf_idf
+```
+TF-IDF, **Term Frequency**, refers to the number of times a term (t) appears in a document (d). In terms of this project, the Term Frequency of movies in the dataset, `IMDB_movies.csv`, is the number of times a term (t) appears in the column, `Description`, from the dataframe, `movie_desc`. This section explores the conceptual patterns in movie franchises' sequels with tokenization. 
+
+```{r}
+text_plot <- movie_tf_idf %>%
+  mutate(word = reorder(word, tf_idf)) %>%
+  filter(str_detect(Title, c("Harry Potter"))) %>%
+  ggplot(aes(x=word, y=tf_idf, fill=Title)) +
+  geom_col(alpha=0.8, show.legend = FALSE) +
+  facet_wrap(~ Title, scales = "free", ncol = 2) +
+  coord_flip() +
+  labs(x="", y="tf-idf", title="Highest tf-idf words in Harry Potter Movie Franchise data") +
+  theme_minimal()
+text_plot
+```
+The three movies, **Harry Potter and the Deathly Hallows: Part 2**, **Harry Potter and the Half-Blood Prince**, and **Harry Potter and the Order of the Phoenix**, share the same, frequent TF-IDF `Description` words, *voldemort's* and *hogwarts*. Not to mention, the terms, *voldemort's* and *hogwarts*, have a relatively high TF-IDF which suggests that these terms are rare terms that are frequent in these documents. The frequency of the word, *voldemort's*, suggest that the films had a bigger focus regarding the character, **Voldemort**, than the movie, **Harry Potter and the Deathly Hallows: Part 1**. 
+
+Some of the TF-IDF terms in these movies corresponds to one another like *evil*, *dark*, *destroy*, and *blood*, which have **negative** connotation. This inherent **negative** overtone in some of the TF-IDF terms in all four movies suggest that the **Harry Potter** movie franchise has a generally **dark** and **grim**  theme. 
+
+Using tokenization with a franchise's movies' `Description` allows easier understanding of the nature of a movie's franchise without watching the actual films. This is especially useful for streaming services who can use tokenization to determine a movie's general theme and atmosphere in order to better organize their films' genres.  
+
+# Topic Modeling
+```{r}
+text_tidy<-movie_desc %>%
+  unnest_tokens(word, Description) %>%
+  anti_join(stop_words)
+text_tidy
+```
+> The code above removes stop words for better efficiency in topic modeling.
+
+```{r}
+text_dtm <- text_tidy %>%
+  count(Title, word, sort=TRUE) %>%
+  cast_dtm(Title, word, n)
+class(text_dtm)
+```
+> The dataframe `text_dtm` has class types called `DocumentTermMatrix` and `simple_triplet_matrix`.
+
+```{r}
+text_lda<-LDA(text_dtm, k=4, control=list(seed=1234))
+text_lda
+```
+> The data frame, `text_dtm`, was modified to have 4 topics and a seed set to number `1234`. 
+
+**Latent Dirichlet Allocation** (LDA) will be used for Topic Modeling in this project, since it allows documents to overlap one another based in terms of content. LDA determines the mixture of terms that is associated to every topic, while it also finds the mixture of topics that characterize each document.
+
+This section will use `LDA` and `Topic Modeling` to determine the most frequented terms for 4 topics by `beta` size regarding movies, and show the greatest difference among Movie topics.
+
+```{r}
+text_topics <- tidy(text_lda, matrix = "beta")
+text_topics 
+```
+> The data frame above is an extraction of `word-topic probabilities` (betas).
+
+```{r}
+top_terms <- text_topics %>%
+  group_by(topic) %>%
+  top_n(10, beta) %>%
+  ungroup() %>%
+  arrange(topic, -beta)
+
+top_terms
+```
+> Data frame of the top 10 most common terms within each topic.
+
+```{r}
+top_terms %>%
+  mutate(topic = paste0("Topic ", topic),
+         term = reorder(term, beta))
+```
+> This is the same table as the one previously, but has the word `Topic` in front of the `Topic` number
+
+
+```{r}
+graph_topics <- top_terms %>%
+  mutate(topic = paste0("Topic ", topic),
+         term = reorder(term, beta)) %>%
+  ggplot(aes(x = term, y = beta, fill = factor(topic))) +
+  geom_col(alpha = 0.8, show.legend = FALSE) +
+  facet_wrap(~topic, scales = "free_y") + 
+  coord_flip() +
+  labs(x="", y=expression(beta))
+  theme_minimal()
+```
+
+```{r}
+graph_topics
+ggsave("graph_topics.pdf", graph_topics,  width = 10, height = 4)
+```
+The dataframe above shows the top 10 most common terms within each topic. For `Topic 1`, the term,  `life`, has the highest `beta` level of `0.010060437`, which suggests that the term, `life`, is the most common term in `Topic 1`. For `Topic 2`, the term,  `family`, has the highest `beta` level of `0.007863619`, which suggests that the term, `family`, is the most common term in `Topic 2`. For `Topic 3`, the term,  `life`, has the highest `beta` level of `0.012327667`, which suggests that the term, `life`, is the most common term in `Topic 3`. For `Topic 4`, the term,  `story`, has the highest `beta` level of `0.013904911`, which suggests that the term, `story`, is the most common term in `Topic 4`. 
+
+```{r}
+beta_spread <- text_topics %>%
+  mutate(topic = paste0("topic", topic)) %>%
+  spread(topic, beta) %>%
+  filter(topic1 > .001 | topic4 > .001) %>%
+  mutate(log_ratio = log2(topic3 / topic1))
+beta_spread %>%
+  group_by(direction = log_ratio > 0) %>%
+  top_n(10, abs(log_ratio)) %>%
+  ungroup() %>%
+  mutate(term = reorder(term, log_ratio)) %>%
+  ggplot(aes(x = term, y = log_ratio)) +
+  geom_col() +
+  labs(
+    x = "", 
+    y = "Log2 ratio of beta in topic 4 / topic 1") +
+  coord_flip() + 
+  theme_minimal()
+```
+The two topics from the algorithm identified domestic and battle-ready movie concepts. The most common words in `topic 4` include domestic concepts, while the words most common in `topic 1` was more related to battle-ready concepts. 
+
+# Sentimental Analysis of Movies with Clusters: How Sentiment affects Rating and Revenue 
+
+
+```{r}
+#Remove Stop words
+movie_stop_rem<-movie_desc %>% 
+  unnest_tokens(word, Description, token="words") %>%
+  filter(!word %in% stop_words$word, str_detect(word, "[a-z]"))
+
+movie_stop_rem
+#movie_stop_rem %>%
+#  filter(word=="stop")
+```
+> The table above removed stop words for easier text mining in sentimental analysis, and list terms from each movie.
+
+```{r}
+# check some of the most frequent words
+movie_freq_word<-movie_stop_rem %>%
+  group_by(word) %>%
+  summarise(uses=n()) %>%
+  arrange(desc(uses)) %>%
+  slice(1:15)
+
+movie_freq_word
+```
+> List the most frequently used words in the Movie `Description`
+
+Section `Sentimental Analysis of Movies with Clusters` will use both `bing` and `nrc` lexicons to see how `Sentiment` affects `Rating` and `Revenue`. According to the article, [Sentiment analysis with tidy data](https://www.tidytextmining.com/sentiment.html), both lexicons have less positive words than negative words, yet "the ratio of negative to positive words is higher in the `bing` lexicon than the `nrc` lexicon." This means that `Sentiment` values in `nrc` has different sentimental meaning and value compared to `bing`. Therefore, Sentiment Analyses with `nrc` and `bing` will be observed separately and independently.  
+
+### Sentiment Analysis of Movies using bing lexicon`
+
+```{r}
+bing_movie<-movie_stop_rem %>%
+  inner_join(get_sentiments("bing")) %>%
+  count(Title, Rating, Revenue.Millions, sentiment) %>%
+  spread(sentiment, n, fill = 0) %>%
+  mutate(sentiment = positive - negative)
+bing_movie
+
+bing_chart<-movie_stop_rem %>%
+  inner_join(get_sentiments("bing")) %>%
+  count(Title, sentiment) %>%
+  spread(sentiment, n, fill = 0) %>%
+  mutate(sentiment = positive - negative) %>% 
+  head(30) %>%
+  ggplot() + 
+  geom_bar(aes(x = reorder(Title, sentiment), 
+               y = sentiment), 
+           stat = "identity") + 
+  coord_flip() + 
+  labs(x = "", 
+       title = "Sentiment Analysis of Movies using bing lexicon",
+       subtitle = "Bar Chart") + 
+  theme_minimal() 
+bing_chart
+```
+
+The lexicon, **bing**, scores a term `sentiment` as either `positive` or `negative`. The table, `bing_movie`, is a modified table of `movie_stop_rem` with 3 added `Sentiment` columns: `negative`, `positive`, and `sentiment` (difference between positive and negative ).
+
+In the bar chart above, it shows the first 30 movies from the table, `bing_movie`, and illustrates every movie's `sentiment` value. A huge majority of the movies have a negative `bing sentiment` value. The movie with the highest positive `bing sentiment` is called *A Kind of Murder* with a `sentiment` value of 4, while the movie with the lowest `bing sentiment` value is called *13 Hours* with a `sentiment` value of -4.    
+
+
+```{r}
+bing_movie_scatter<-movie_stop_rem %>%
+  inner_join(get_sentiments("bing")) %>%
+  count(Title,Rating, Revenue.Millions, sentiment) %>%
+  spread(sentiment, n, fill = 0) %>%
+  mutate(sentiment = positive - negative) %>% 
+  ggplot(aes(x = Rating, y = Revenue.Millions, color = as.factor(sentiment)))+
+  labs(title = "Sentiment Analysis of Movies using bing lexicon", 
+       subtitle = "Scatterplot") + 
+  geom_point()
+
+bing_movie_scatter
+```
+
+The scatterplot above illustrates the movie terms' relations between `Revenue (Millions)` and `Rating` which is clustered by the `bing` sentiment. 
+
+According to the graph, a majority of movie terms are from a movie with a `Rating` of around 4 to 9 and some outliers with a `Rating` of around 2 to 3. Most movie terms are from a movie with a `Revenue` of around 0 to 500 million dollars and some outliers with a `Revenue` of around 500 to 900 million dollars.
+
+Most films are described in a mostly negative `bing sentiment` range of -4 to 2. Most highly rated and profitable movies are described in a negative `bing sentiment` of around -1 to -3. 
+
+Even though the graph has given good data for analysis, it lacks specification and precision since the plots and colors are too blended to differentiate between the other plots. The next few scatterplots will separate the `negative`, `positive`, and `neutral sentiments` with the last scatterplot re-categorizing the `sentiments` as either `positive`, `negative`, or `neutral`.   
+
+
+```{r}
+#Positive and Neutral Sentiment Scatter Plot
+pos_neu_movie_bing_scatter<-movie_stop_rem %>%
+  inner_join(get_sentiments("bing")) %>%
+  count(Title,Rating, Revenue.Millions, sentiment) %>%
+  spread(sentiment, n, fill = 0) %>%
+  mutate(sentiment = positive - negative) %>% 
+  filter(sentiment==c(0,1,2,3,4,5,6)) %>%
+  ggplot(aes(x = Rating, y = Revenue.Millions, color = as.factor(sentiment)))+
+  labs(title = "Positive and Neutral Sentiment Analysis of Movies using bing lexicon", 
+       subtitle = "Scatterplot") +
+  geom_point()
+
+pos_neu_movie_bing_scatter
+
+```
+
+The scatterplot above shows the plots in relation to `Rating` and `Revenue` with clusters of positive (1 to 6) and neutral (0) `bing sentiment`. The graph doesn't seem to have a significant shape to make an inference.
+
+For `bing sentiment` value of 0, it has a `Rating` range of ~5.7 to ~8.2 and a `Revenue` range of ~0 to ~190 million dollars. For `bing sentiment` value of 1, it has a `Rating` range of ~5.6 to ~8 and a `Revenue` range of ~0 to ~110 million dollars with outliers with a Revenue of ~320 and ~360 million. For `bing sentiment` value of 2, it has a `Rating` range of ~5.3 to ~7.6 and a `Revenue` range of ~0 to ~150 million dollars. For  `bing sentiment` value of 3, has only one plot with a `Rating` value of ~6.6 and `Revenue` value of ~10 million dollars.
+
+```{r}
+#Negative Sentiment Scatter Plot
+neg_movie_bing_scatter<-movie_stop_rem %>%
+  inner_join(get_sentiments("bing")) %>%
+  count(Title,Rating, Revenue.Millions, sentiment) %>%
+  spread(sentiment, n, fill = 0) %>%
+  mutate(sentiment = positive - negative) %>% 
+  filter(sentiment==c(-1,-2,-3,-4,-5,-6)) %>%
+  ggplot(aes(x = Rating, y = Revenue.Millions, color = as.factor(sentiment)))+
+  labs(title = "Negative Sentiment Analysis of Movies using bing lexicon", 
+       subtitle = "Scatterplot")+
+  geom_point() 
+
+neg_movie_bing_scatter
+```
+
+The scatterplot above shows the plots in relation to `Rating` and `Revenue` with clusters of negative (-6 to -1) `bing sentiment`. The `bing sentiments`, -1 and -2, have the highest `Revenue` and `Rating` in the `negative sentiment` scatterplot.
+
+For the `bing sentiment` value of -1, it has a `Rating` range of ~5.3 to ~8.2  with an outlier of ~8.8 and a `Revenue` range of ~0 to ~310 million dollars with outliers of ~500 million and ~950 million. For the `sentiment` value of -2, it has a `Rating` range of ~5.1 to ~7.9 and a `Revenue` range of ~0 to ~390 million dollars. For the `sentiment` value of -3, it has a `Rating` range of ~5.7 to ~8 and a `Revenue` range of ~0 to ~370 million dollars.  For the `sentiment` value of -4, it has a `Rating` range of ~7.4 to ~7.7 with an outlier of 5.4 and a `Revenue` range of ~65 to ~480 million dollars. For the `sentiment` value of -5, it has plot with a `Rating` value of ~7 and a `Revenue` value of ~316 million dollars.
+
+
+
+
+```{r}
+cat_movie_bing<- movie_stop_rem %>%
+  inner_join(get_sentiments("bing")) %>%
+  count(Title,Rating, Revenue.Millions, sentiment) %>%
+  spread(sentiment, n, fill = 0) %>%
+  mutate(sentiment = positive - negative)
+
+cat_movie_bing<-cat_movie_bing %>% mutate(Sentiment_Category = cut(sentiment,
+                                      breaks = c(-7,-1,0,6),
+                                      labels=c("Negative", "Neutral", "Positive")))
+cat_movie_bing_scatter<-cat_movie_bing %>%
+  ggplot(aes(x = Rating, y = Revenue.Millions, color = as.factor(Sentiment_Category)))+
+  labs(title = "Categorical Sentiment Analysis of Movies using bing lexicon", 
+       subtitle = "Scatterplot")+
+geom_point() 
+
+cat_movie_bing
+cat_movie_bing_scatter
+```
+
+The graph is a categorical `bing sentimental` scatterplot that clusters the plots by `Sentinment_Category` with 3 categories: `Negative` (-6 to -1), `Neutral` (0), and `Positive` (1 to 6). 
+
+The scatterplot shows that the negative `bing sentiment` dominates more frequently than positive and neutral `bing sentiment`. Not to mention, that the negative `sentiment` is the most likely sentiment to have a high `Revenue` and `Rating`, which means that movie's with a `negative bing sentiment` are more likely to be successful thatn those that have a `positive` or `neutral bing sentiment.` 
+
+
+
+### Sentiment Analysis of Movies using nrc lexicon
+
+```{r}
+nrc_movie<-movie_stop_rem %>% 
+  inner_join(get_sentiments("nrc")) %>% 
+  group_by(sentiment) %>% 
+  count(Title, Rating, Revenue.Millions, sentiment)
+
+nrc_movie
+
+nrc_bar<-movie_stop_rem %>% 
+  inner_join(get_sentiments("nrc")) %>% 
+  group_by(sentiment) %>% 
+  count(Title, Rating, Revenue.Millions, sentiment) %>%
+  ggplot() + 
+  geom_bar(
+    aes(x = reorder(sentiment, n),
+        y = n), 
+    stat = "identity") + 
+  labs(title = "Sentiment analysis using nrc lexicon",
+       subtitle = "Bar Chart",
+       x = "", 
+       y = "word-count") + 
+  theme_minimal()
+
+nrc_bar
+```
+
+The table above is a dataframe of `movie_stop_rem` with an inner join to the lexicon, `nrc`. The lexicon, **nrc**, categorizes a term under a `sentiment` type category: `positive`, `negative`, `anger`, `anticipation`, `disgust`, `fear`, `joy`, `sadness`, `surprise`, and `trust`. The table has a column called `n`, which is the word-count of the every `nrc sentiment` category. 
+
+The graph above is a bar chart from the dataframe, `nrc_movie`, which counts the word frequency of the `nrc sentiment` category. The highest frequented `nrc sentiment`, is `positive`, while the lowest frequented `nrc sentiment` is `surprise`.
+
+
+
+
+```{r}
+movie_nrc<-movie_stop_rem %>% 
+  inner_join(get_sentiments("nrc")) %>% 
+  group_by(sentiment) %>% 
+  count(Title, Rating, Revenue.Millions, sentiment) %>% 
+  filter() %>%
+  ggplot(aes(x = Rating, y = Revenue.Millions, color = as.factor(sentiment))) + 
+  geom_point() +
+  labs(title = "Sentiment Analysis with nrc lexicon Scatterplot",
+       subtitle = "includes Cluster Sentiment Coloring")
+movie_nrc
+#sentiment=="surprise"
+```
+
+The scatterplot above shows the movie terms' relations between Revenue (Millions) and Rating which is clustered by the `nrc` sentiment. Based on the visual, it seems that movie `Descriptions` are dominated by the `nrc sentiment` **surprise** and **trust**. These 2 categories are the most likely `nrc sentiment` to have a high `Revenue` and `Rating`. 
+
+This graph is too blended with the colors, since the color key for some of the `nrc sentiments` are similar. This project will divide the `nrc sentiments` to 3 categories: `positive` (`joy`, `anticipation`, `positive`, `truth`), `negative` (`anger`, `disgust`, `fear`, `negative`, `sadness`), and `neutral`(`surprise`). These categorical values were based on the `nrc` diagram in the webpage, [NRC Word-Emotion Association Lexicon](http://saifmohammad.com/WebPages/NRC-Emotion-Lexicon.htm).  
+
+
+```{r}
+neg_movie_nrc_scatter<-movie_stop_rem %>% 
+  inner_join(get_sentiments("nrc")) %>% 
+  group_by(sentiment) %>% 
+  count(Title, Rating, Revenue.Millions, sentiment) %>% 
+  filter(sentiment==c("anger", "disgust", "fear", "negative", "sadness")) %>%
+  ggplot(aes(x = Rating, y = Revenue.Millions, color = as.factor(sentiment))) + 
+  geom_point() +
+  labs(title = "Negative Sentiment Analysis with nrc lexicon Scatterplot",
+       subtitle = "includes Cluster Sentiment Coloring")
+neg_movie_nrc_scatter
+#sentiment=="surprise"
+#shape=1
+```
+
+The scatterplot shown above is in regard to `negative nrc sentiments` with 5 categories: `anger`, `disgust`, `fear`, `negative`, and `sadness`. 
+
+The graph is being dominated by the `negative sentiments`, `negative` and `sadness`, which show that that the most highly rated and highly profitable movies that have `negative sentiment` descriptions have terms related to having `nrc` lexicons called `negative` and `sadness`. Also, the plots are accumulating in the `Rating` range of ~4 to ~9 with a `Revenue` range of ~0 to ~550 million with an outlier of ~620 million.
+
+
+
+
+```{r}
+movie_stop_rem %>% 
+  inner_join(get_sentiments("nrc")) %>% 
+  group_by(sentiment) %>% 
+  count(Title, Rating, Revenue.Millions, sentiment) %>% 
+  filter(sentiment==c("joy", "positive", "anticipation", "trust")) %>%
+  ggplot(aes(x = Rating, y = Revenue.Millions, color = as.factor(sentiment))) + 
+  geom_point()+
+  labs(title = "Positive Sentiment Analysis with nrc lexicon Scatterplot",
+       subtitle = "includes Cluster Sentiment Coloring")
+```
+
+The scatterplot shown above is in regard to `positive nrc sentiments` with 4 categories: `anticipation`, `joy`, `positive`, and `trust`. 
+
+The graph is only concentrated by the `positive sentiments`, `trust` and `positive`, which shows that that the most highly rated and highly profitable movies that have `positive sentiment` descriptions have terms related to having `nrc` lexicons called `positive` and `trust`. 
+
+```{r}
+movie_stop_rem %>% 
+  inner_join(get_sentiments("nrc")) %>% 
+  group_by(sentiment) %>% 
+  count(Title, Rating, Revenue.Millions, sentiment) %>% 
+  filter(sentiment==c("surprise")) %>%
+  ggplot(aes(x = Rating, y = Revenue.Millions, color = as.factor(sentiment))) + 
+  geom_point() +
+  labs(title = "Neutral Sentiment Analysis with nrc lexicon Scatterplot",
+       subtitle = "includes Cluster Sentiment Coloring")
+  
+```
+
+The scatterplot shown above is excludes `positive and negative nrc sentiments` with 1 category: `surprise`, since it's the only category that wasn't place as `positive` or `negative` in the article, [NRC Word-Emotion Association Lexicon](http://saifmohammad.com/WebPages/NRC-Emotion-Lexicon.htm). 
+
+The graph is only concentrated by the `neutral sentiment`, `surprise`, which shows that it has a `Rating` range of ~5 to ~9 with some outliers, and a `Revenue` range of ~0 to ~400 million with some outliers. 
+
+```{r}
+cat_movie_nrc<- movie_stop_rem %>%
+  inner_join(get_sentiments("nrc")) %>% 
+  group_by(sentiment) %>% 
+  count(Title, Rating, Revenue.Millions, sentiment)
+
+cat_movie_nrc$Sentiment_Category[cat_movie_nrc$sentiment == "joy" | cat_movie_nrc$sentiment =="positive"| cat_movie_nrc$sentiment == "trust"| cat_movie_nrc$sentiment == "anticipation" ] = "Positive"
+
+cat_movie_nrc$Sentiment_Category[ cat_movie_nrc$sentiment == "surprise"] = "Neutral"
+
+cat_movie_nrc$Sentiment_Category[cat_movie_nrc$sentiment == "anger" | cat_movie_nrc$sentiment == "disgust"| cat_movie_nrc$sentiment == "fear" | cat_movie_nrc$sentiment == "negative" | cat_movie_nrc$sentiment == "sadness"] = "Negative"
+
+cat_movie_nrc
+cat_movie_nrc_scatter<-cat_movie_nrc %>%
+  ggplot(aes(x = Rating, y = Revenue.Millions, color = as.factor(Sentiment_Category)))+
+  labs(title = "Categorical Sentiment Analysis of Movies using nrc lexicon", 
+       subtitle = "Scatterplot")+
+  geom_point(shape=1) 
+cat_movie_nrc
+cat_movie_nrc_scatter
+```
+
+The graph is a categorical `nrc sentimental` scatterplot that clusters the plots by `Sentinment_Category` with 3 categories: `Negative` (`anger`, `disgust`, `fear`, `negative`, `sadness`), `Neutral` (`Surprise`), and `Positive` (`joy`, `anticipation`, `positive`, `truth`). 
+
+The scatterplot shows that the positive `nrc sentiment` is more frequent than negative and neutral `nrc sentiment`. Not to mention, that the positive `sentiment` is the most likely sentiment to have a high `Revenue` and `Rating`.
+
+The `nrc` scatterplot has a different `sentiment` result than the `bing` scatterplot, where the `bing` scatterplot is more dominated by the `negative sentiment`. Based on the article, [Sentiment analysis with tidy data](https://www.tidytextmining.com/sentiment.html), the reason for this to occur is that the "ratio of negative to positive words is higher in the `bing` lexicon than the `nrc` lexicon"
+
+
+# Network of Bigrams for Movies
+```{r}
+movie_filtered <- movie_desc %>%
+    unnest_tokens(bigram, Description, token = "ngrams", n = 2) %>%
+    separate(bigram, into = c("word1", "word2"), sep = " ") %>% 
+    filter(!word1 %in% stop_words$word, !is.na(word1)) %>%
+    filter(!word2 %in% stop_words$word, !is.na(word2))
+movie_filtered
+```
+
+> Removes stop-words and performs tokenization on the dataframe, `movie_desc`
+
+```{r}
+movie_counts <- movie_filtered %>% 
+  count(word1, word2, sort = TRUE) 
+movie_counts
+```
+> The most common combinations of words in the Movie's `Description` 
+
+
+```{r}
+# filter for only relatively 
+# common combinations
+bigram_graph <- movie_counts %>%
+  filter(n > 3) %>%
+  graph_from_data_frame()
+bigram_graph
+```
+The `bigram_graph` builds the graph from the data frame, `movie_counts`, where the value of `n` is set to be greater than 3 in order to reduce complexity of the bigram diagram.
+
+
+```{r}
+set.seed(310)
+# set arrow 
+a <- grid::arrow(
+  type = "closed", 
+  length = unit(.10, "inches"))
+
+# plot graph
+ggraph(bigram_graph, layout = "fr") +
+  geom_edge_link(
+    aes(edge_alpha = n), 
+    show.legend = FALSE, arrow = a, 
+    end_cap = circle(.07, 'inches')) +
+  geom_node_point(color = "#53316B", 
+                  size = 4) +
+  geom_node_text(aes(label = name), 
+                 vjust = 1.5, hjust = 0.2) + 
+  theme_void()
+```
+The Movie network of bigrams show basic word connections between 2 to 3 words, where the word in the end of the arrow is the 1st word and the front of the arrow is the 2nd word in the terms relationship. For example, the words *serial* and *killer* show a 2 term-relationship that can be assumed to occur more often in thriller movie `Descriptions`. The words *world*, *war*, and *ii*show a 3-term relationship that can be assumed to occur often in WW2 movie descriptions. The network of bigrams regarding movies help illustrate how frequented movie `Description` words are connected and relate to other movies.
+
+# Conclusion
+
+This project explored text mining techniques in order to develop relational analysis  concerning movie `Description` terms from the dataset, `IMDB_movies.csv`.
+
+Tokenization (TF-DF) was used to increase efficiency to analyze term frequencies in movie `Descriptions`, so that the conceptual theme of a movie franchise would be determined even if a person has never watched any of the films. This would be distinctly purposeful for those who are categorizing movies into genres in a streaming service company like *Netflix*. This could be further explored if a user also implements nonrelational and relational database to store these terms for future reference. Topic Modeling created mixtures of terms that are correlated to every topic and the mixture of topics that distinguishes each document in the dataset, `IMDB_movies.csv`. 
+
+Sentimental Analysis focused on movies with `Sentimetal` Clusters that were used `bing` and `nrc` lexicons to see how `Sentiment` affects `Rating` and `Revenue`. When trying to implement the `nrc` dataframe to re-organize the string categories into more general categories, it was a challenge to transform the data categories since it was initialized with string values, but eventually a solution was revealed and it helped greatly with the Sentimental Analysis. It is beneficial to re-categorize the `sentiment` categories from `nrc` and `bing` into a system with 3 categories: `Negative`, `Positive`, `Neutral`. This kind of system helped with Cluster Analysis in ggplot, since there was too many categories to analyze in one graph. 
+
+The network of bigrams for the movies dataset help summarize how frequented movie `Description` words create term relationships and how they connect to other movies. This type of text mining technique can be also used to see if the films who share similar text relations have similar storylines and genres.
+
+The project has proven that text mining techniques can ease better analysis for categorizing movies with just the `Descriptions` while excluding the `Genre`from the dataset, `IMDB_movies.csv`.
+
+# References
+(n.d.). Retrieved from http://saifmohammad.com/WebPages/NRC-Emotion-Lexicon.htm
+
+Robinson, J. S. A. D. (2020). 2 Sentiment analysis with tidy data | Text Mining with R. Titdy Text Mining. https://www.tidytextmining.com/sentiment.html
