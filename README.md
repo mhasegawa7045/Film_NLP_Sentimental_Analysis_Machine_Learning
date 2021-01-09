@@ -1,7 +1,7 @@
 # Film-Text-Mining
  Tokenization, Topic Modeling, Sentiment Analysis, Network of Bigrams
  
- ## Data Mining and Text Mining 
+ ## Film Genre and Story Description Data Mining and Text Mining 
 
 > Marie Hasegawa `mhasegawa7045@floridapoly.edu`
 
