@@ -1,4 +1,4 @@
-# Film-Text-Mining
+# Film Movie Text Mining and Sentimental Analysis
  Tokenization, Topic Modeling, Sentiment Analysis, Network of Bigrams
  
  ## Film Genre and Story Description Data Mining and Text Mining 
