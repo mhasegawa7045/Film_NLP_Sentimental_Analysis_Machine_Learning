@@ -5,9 +5,6 @@
 
 > Marie Hasegawa `mhasegawa7045@floridapoly.edu`
 
-
-### Final Project
-
 The purpose of this project is to see if text mining techniques can ease better analysis for categorizing movies with just the `Descriptions` while ignoring the `Genre`from the dataset, `IMDB_movies.csv`, which is stored under the dataframe variable, `movies_desc`. 
 
 - Tokenization (TF-DF) was used to increase efficiency to analyze term frequencies in movie `Descriptions`, so that the conceptual theme of a movie franchise would be determined even if a person has never watched any of the films. 
