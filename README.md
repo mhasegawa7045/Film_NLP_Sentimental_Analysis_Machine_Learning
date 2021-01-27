@@ -3,7 +3,6 @@
  
  ## Film Genre and Story Description Data Mining and Text Mining 
 
-> Marie Hasegawa `mhasegawa7045@floridapoly.edu`
 
 The purpose of this project is to see if text mining techniques can ease better analysis for categorizing movies with just the `Descriptions` while ignoring the `Genre`from the dataset, `IMDB_movies.csv`, which is stored under the dataframe variable, `movies_desc`. 
 
