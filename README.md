@@ -11,6 +11,9 @@ The purpose of this project is to see if text mining techniques can ease better 
 - Sentimental Analysis focused on Movies with Sentimetal Clusters that were using `bing` and `nrc` lexicons to see how `Sentiment` affects `Rating` and `Revenue`. 
 - The network of bigrams for the Movies dataset help summarize how frequented Movie `Description` word-terms create term reklationships and how they connect to other movies.
 
+### Presentation Link
+https://www.youtube.com/watch?v=AbwBXCEKPAs&t=9s
+
 ### References
 (n.d.). Retrieved from http://saifmohammad.com/WebPages/NRC-Emotion-Lexicon.htm
 
