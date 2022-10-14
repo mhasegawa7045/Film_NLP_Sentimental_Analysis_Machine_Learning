@@ -1,4 +1,4 @@
-# Data Mining and Text Mining 
+# IMDB Data Mining and Text Mining 
 
 > Marie Hasegawa `mhasegawa7045@floridapoly.edu`
 
