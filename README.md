@@ -1,7 +1,7 @@
-# Film Movie Text Mining and Sentimental Analysis
+# Film Movie Machine Learning Project: Text Mining and Sentimental Analysis
  Tokenization, Topic Modeling, Sentiment Analysis, Network of Bigrams
  
- ## Film Genre and Story Description Data Mining and Text Mining 
+ ## Film Genre and Story Description Machine Learning: Data Mining and Text Mining 
 
 
 The purpose of this project is to see if text mining techniques can ease better analysis for categorizing movies with just the `Descriptions` while ignoring the `Genre`from the dataset, `IMDB_movies.csv`, which is stored under the dataframe variable, `movies_desc`. 
