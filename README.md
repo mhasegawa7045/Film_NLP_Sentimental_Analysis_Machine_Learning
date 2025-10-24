@@ -1,4 +1,4 @@
-# Film Movie Machine Learning Project: Text Mining and Sentimental Analysis
+# Film Movie NLP Project: Text Mining and Sentimental Analysis
  Tokenization, Topic Modeling, Sentiment Analysis, Network of Bigrams
  
  ## Film Genre and Story Description Machine Learning: Data Mining and Text Mining 
